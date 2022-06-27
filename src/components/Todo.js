@@ -1,39 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /* コンポーネント */
 import TodoItem from './TodoItem';
 import Input from './Input';
 import Filter from './Filter';
-
-/* カスタムフック */
-import useStorage from '../hooks/storage';
+import db from '../lib/firebase'
+import {collection, getDocs, addDoc, updateDoc, doc} from 'firebase/firestore'
 
 /* ライブラリ */
-import {getKey} from "../lib/util";
 
 function Todo() {
-  const [items, putItems, clearItems] = useStorage();
+  const [items, putItems] = useState([]);
   
   const [filter, setFilter] = React.useState('ALL');
-
+  const itemCollection = collection(db, "todos");
   const displayItems = items.filter(item => {
     if (filter === 'ALL') return true;
     if (filter === 'TODO') return !item.done;
     if (filter === 'DONE') return item.done;
   });
   
-  const handleCheck = checked => {
-    const newItems = items.map(item => {
-      if (item.key === checked.key) {
-        item.done = !item.done;
-      }
-      return item;
-    });
-    putItems(newItems);
+  const handleCheck = async(item) => {
+    const todo = doc(db,"todos",item.key)
+    console.log(todo.data)
+    const newField = {done: !item.done}
+    await updateDoc(todo,newField)
   };
+
+  const deleteAll = async()=> {    
+    db.collection("todos").get().then(res => {
+      res.forEach(element => {
+      element.ref.delete()
+      })
+    })
+  }
+  const fetchTodos = async()=>{
+    const data = await getDocs(itemCollection)
+    putItems(data.docs.map((doc)=> ({...doc.data(), key: doc.id})))
+  }
+  useEffect(() => {
+    fetchTodos();
+  }, [items])
   
-  const handleAdd = text => {
-    putItems([...items, { key: getKey(), text, done: false }]);
+  const handleAdd = async(text) => {
+    await addDoc(itemCollection, {text: text, done: false})    
   };
   
   const handleFilterChange = value => setFilter(value);
@@ -64,7 +74,7 @@ function Todo() {
         {displayItems.length} items
       </div>
       <div className="panel-block">
-        <button className="button is-light is-fullwidth" onClick={clearItems}>
+        <button className="button is-light is-fullwidth" onClick={deleteAll}>
           全てのToDoを削除
         </button>
       </div>
